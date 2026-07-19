@@ -5,7 +5,7 @@ import Link from "next/link";
 import { FavoriteButton } from "@/components/offer/FavoriteButton";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { cn, countryFlag, DEVICE_LABELS, formatMinutes, formatReward } from "@/lib/utils";
+import { cn, countryFlag, DEVICE_LABELS, formatCredits, formatMinutes } from "@/lib/utils";
 import type { OfferDTO } from "@/types/offer";
 
 interface OfferCardProps {
@@ -84,7 +84,7 @@ export function OfferCard({ offer, favorited = false }: OfferCardProps) {
 
       <div className="relative z-10 mt-4 flex items-center justify-between border-t border-border/60 pt-3">
         <span className="font-mono text-base font-semibold tracking-tight text-reward">
-          {formatReward(offer.rewardAmount, offer.rewardCurrency)}
+          {formatCredits(offer.hqCredits)}
         </span>
         <Link
           href={`/go/${offer.id}`}

@@ -58,7 +58,35 @@ export interface PublicOffer {
   provider: { slug: string; name: string };
 }
 
-/** Serializable offer sent to the client (no Prisma Decimal / Date). */
+/**
+ * The canonical HQ offer shape (the sprint's `HQOffer`). Every provider's
+ * payload is normalized to this before ranking, storage and display. It is
+ * the internal/server model: `providerReward` lives here for reconciliation
+ * but MUST NOT be serialized to the client — the browser only ever sees
+ * `hqCredits` (see OfferDTO). NormalizedOffer is the provider-adapter input
+ * form of this model.
+ */
+export interface HQOffer {
+  id: string;
+  provider: string;
+  providerOfferId: string;
+  title: string;
+  description: string;
+  image: string;
+  category: string;
+  platform: DeviceType;
+  country: string[];
+  trackingUrl: string;
+  estimatedMinutes: number;
+  /** Provider reward — server-side only, never sent to the client. */
+  providerReward: number;
+  hqCredits: number;
+}
+
+/**
+ * Serializable offer sent to the client (no Prisma Decimal / Date).
+ * Provider economics are intentionally absent — only `hqCredits` ships.
+ */
 export interface OfferDTO {
   id: string;
   title: string;
@@ -66,8 +94,7 @@ export interface OfferDTO {
   requirements: string | null;
   imageUrl: string | null;
   bannerUrl: string | null;
-  rewardAmount: number;
-  rewardCurrency: string;
+  hqCredits: number;
   device: DeviceType;
   status: OfferStatus;
   isFeatured: boolean;

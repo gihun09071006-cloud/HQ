@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { cn, formatReward, timeAgo } from "@/lib/utils";
+import { cn, formatCredits, timeAgo } from "@/lib/utils";
 import type { AnalyticsSummary } from "@/services/analytics.service";
 import type { OfferDTO } from "@/types/offer";
 
@@ -65,7 +65,31 @@ export function AdminDashboard({ analytics, providers, offers: initialOffers }: 
 
   return (
     <div className="space-y-10">
-      {/* KPI cards */}
+      {/* Real-time "today" KPIs */}
+      <section>
+        <h2 className="mb-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
+          Today (live)
+        </h2>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <Stat label="Clicks today" value={analytics.today.clicks.toLocaleString()} />
+          <Stat label="Completions today" value={analytics.today.completions.toLocaleString()} />
+          <Stat
+            label="Conv. rate"
+            value={
+              analytics.today.conversionRate != null
+                ? `${(analytics.today.conversionRate * 100).toFixed(1)}%`
+                : "—"
+            }
+          />
+          <Stat
+            label="Est. provider revenue"
+            value={`$${analytics.estProviderRevenue.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
+          />
+          <Stat label="HQ Credits issued" value={analytics.totalCreditsIssued.toLocaleString()} />
+        </div>
+      </section>
+
+      {/* Window KPI cards */}
       <section>
         <h2 className="mb-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
           Last {analytics.windowDays} days
@@ -156,7 +180,7 @@ export function AdminDashboard({ analytics, providers, offers: initialOffers }: 
               <tr className="border-b border-border text-left font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-2.5 font-medium">Offer</th>
                 <th className="px-4 py-2.5 font-medium">Provider</th>
-                <th className="px-4 py-2.5 font-medium">Reward</th>
+                <th className="px-4 py-2.5 font-medium">Credits</th>
                 <th className="px-4 py-2.5 font-medium">Clicks</th>
                 <th className="px-4 py-2.5 font-medium">Status</th>
                 <th className="px-4 py-2.5 font-medium">Featured</th>
@@ -170,7 +194,7 @@ export function AdminDashboard({ analytics, providers, offers: initialOffers }: 
                   </td>
                   <td className="px-4 py-2.5 text-muted-foreground">{o.provider.name}</td>
                   <td className="px-4 py-2.5 font-mono text-reward">
-                    {formatReward(o.rewardAmount, o.rewardCurrency)}
+                    {formatCredits(o.hqCredits)}
                   </td>
                   <td className="px-4 py-2.5 font-mono">{o.clickCount}</td>
                   <td className="px-4 py-2.5">

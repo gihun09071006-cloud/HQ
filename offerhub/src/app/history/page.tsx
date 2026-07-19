@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 
 import { Badge } from "@/components/ui/badge";
 import { getServerAuthSession } from "@/lib/auth";
-import { formatReward, timeAgo } from "@/lib/utils";
+import { formatCredits, timeAgo } from "@/lib/utils";
 import { engagementService } from "@/services/engagement.service";
 
 export const metadata: Metadata = { title: "History" };
@@ -54,7 +54,7 @@ export default async function HistoryPage() {
                   </p>
                 </div>
                 <span className="shrink-0 font-mono text-sm font-semibold text-reward">
-                  {formatReward(offer.rewardAmount, offer.rewardCurrency)}
+                  {formatCredits(offer.hqCredits)}
                 </span>
               </Link>
             </li>

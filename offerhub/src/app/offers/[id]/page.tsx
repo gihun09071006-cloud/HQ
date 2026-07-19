@@ -9,7 +9,7 @@ import { OfferGrid } from "@/components/offer/OfferGrid";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { getServerAuthSession } from "@/lib/auth";
-import { cn, countryFlag, DEVICE_LABELS, formatMinutes, formatReward } from "@/lib/utils";
+import { cn, countryFlag, DEVICE_LABELS, formatCredits, formatMinutes } from "@/lib/utils";
 import { engagementService } from "@/services/engagement.service";
 import { offerService } from "@/services/offer.service";
 
@@ -26,7 +26,7 @@ export async function generateMetadata({ params }: OfferPageProps): Promise<Meta
     title: offer.title,
     description:
       offer.description ??
-      `Earn ${formatReward(offer.rewardAmount, offer.rewardCurrency)} via ${offer.provider.name}.`,
+      `Earn ${formatCredits(offer.hqCredits)} via ${offer.provider.name}.`,
     openGraph: {
       title: offer.title,
       description: offer.description ?? undefined,
@@ -57,8 +57,8 @@ export default async function OfferPage({ params }: OfferPageProps) {
     "@type": "Offer",
     name: offer.title,
     description: offer.description ?? undefined,
-    price: offer.rewardAmount,
-    priceCurrency: offer.rewardCurrency,
+    // Reward is expressed in HQ Credits (an internal unit), so no monetary
+    // price/priceCurrency is published here.
     availability: "https://schema.org/InStock",
     url: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/offers/${offer.id}`,
   };
@@ -143,7 +143,7 @@ export default async function OfferPage({ params }: OfferPageProps) {
             Reward
           </p>
           <p className="mt-1 font-mono text-3xl font-semibold tracking-tight text-reward">
-            {formatReward(offer.rewardAmount, offer.rewardCurrency)}
+            {formatCredits(offer.hqCredits)}
           </p>
 
           <dl className="mt-5 space-y-2.5 text-sm">

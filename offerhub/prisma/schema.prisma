@@ -225,9 +225,12 @@ model ViewHistory {
 model Click {
   id        String   @id @default(cuid())
   offerId   String
+  provider  String? // provider slug at click time
   userId    String?
   country   String? // from edge geo header when available
   device    String? // coarse UA classification
+  ipHash    String? // salted SHA-256 of the client IP (never the raw IP)
+  userAgent String?  @db.Text
   referer   String?
   createdAt DateTime @default(now())
 
@@ -250,13 +253,20 @@ model OfferCompletion {
   id              String   @id @default(cuid())
   provider        String // "adgem", ...
   transactionId   String // provider-unique transaction id
+  requestId       String? // provider request id, if sent
   playerId        String // provider-side player id (== our User.id)
   userId          String?
   offerId         String? // resolved Offer.id, when the offer is known
   externalOfferId String? // provider-side offer id
+  offerName       String?
+  goalId          String? // multi-goal / event offers
+  goalName        String?
+  campaignId      String?
+  country         String?
   rewardAmount    Decimal? @db.Decimal(12, 2) // provider player reward — server-side only
   payout          Decimal? @db.Decimal(12, 4) // provider revenue (our payout) — server-side only
   credits         Int // HQ Credits granted for this completion
+  status          String   @default("credited") // credited | ignored | reversed
   createdAt       DateTime @default(now())
 
   user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)

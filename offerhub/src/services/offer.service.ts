@@ -1,4 +1,5 @@
 import { cached } from "@/lib/cache";
+import { CreditEngine } from "@/lib/CreditEngine";
 import { db } from "@/lib/db";
 import type { OfferListQuery } from "@/lib/validation";
 import { buildOfferWhere, offerRepository, type OfferWithRelations } from "@/repositories/offer.repository";
@@ -18,8 +19,9 @@ export function toOfferDTO(row: OfferWithRelations): OfferDTO {
     requirements: row.requirements,
     imageUrl: row.imageUrl,
     bannerUrl: row.bannerUrl,
-    rewardAmount: Number(row.rewardAmount),
-    rewardCurrency: row.rewardCurrency,
+    // Provider reward is converted here and never leaves the server; the
+    // client only receives HQ Credits (seeded by the provider offer id).
+    hqCredits: CreditEngine.compute(Number(row.rewardAmount), row.externalId),
     device: row.device,
     status: row.status,
     isFeatured: row.isFeatured,

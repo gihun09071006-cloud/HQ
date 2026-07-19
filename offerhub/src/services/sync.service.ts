@@ -1,3 +1,4 @@
+import { logEvent } from "@/lib/logger";
 import { offerRepository } from "@/repositories/offer.repository";
 import { providerRepository } from "@/repositories/provider.repository";
 import { getProviders } from "@/providers/registry";
@@ -60,6 +61,7 @@ export async function syncProvider(provider: OfferProvider): Promise<SyncReport>
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await providerRepository.markSyncError(record.id, message);
+    logEvent("provider_failure", { provider: provider.slug, message });
     return { provider: provider.slug, synced: 0, expired: 0, error: message };
   }
 }

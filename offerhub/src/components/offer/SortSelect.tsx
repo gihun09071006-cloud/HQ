@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 const SORTS = [
   { value: "trending", label: "Trending" },
   { value: "newest", label: "Newest" },
-  { value: "reward", label: "Highest reward" },
+  { value: "reward", label: "Highest credits" },
   { value: "featured", label: "Featured" },
 ] as const;
 

@@ -7,6 +7,16 @@ export interface AnalyticsSummary {
   ctr: number | null; // clicks / detail views within the window
   activeOffers: number;
   users: number;
+  /** Real-time "today" KPIs (since local midnight of the server). */
+  today: {
+    clicks: number;
+    completions: number;
+    conversionRate: number | null; // completions / clicks
+  };
+  /** Estimated provider revenue within the window (admin-only aggregate). */
+  estProviderRevenue: number;
+  /** All-time HQ Credits issued via completions. */
+  totalCreditsIssued: number;
   topOffers: { id: string; title: string; clicks: number }[];
   topCountries: { country: string; clicks: number }[];
   topCategories: { category: string; clicks: number }[];
@@ -15,8 +25,21 @@ export interface AnalyticsSummary {
 export const analyticsService = {
   async summary(windowDays = 7): Promise<AnalyticsSummary> {
     const since = new Date(Date.now() - windowDays * 24 * 60 * 60 * 1000);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
-    const [clicks, views, activeOffers, users, offerGroups, countryGroups] = await Promise.all([
+    const [
+      clicks,
+      views,
+      activeOffers,
+      users,
+      offerGroups,
+      countryGroups,
+      todayClicks,
+      todayCompletions,
+      revenueAgg,
+      creditsAgg,
+    ] = await Promise.all([
       db.click.count({ where: { createdAt: { gte: since } } }),
       db.viewHistory.count({ where: { viewedAt: { gte: since } } }),
       db.offer.count({ where: { status: "ACTIVE" } }),
@@ -35,6 +58,13 @@ export const analyticsService = {
         orderBy: { _count: { country: "desc" } },
         take: 8,
       }),
+      db.click.count({ where: { createdAt: { gte: startOfToday } } }),
+      db.offerCompletion.count({ where: { createdAt: { gte: startOfToday } } }),
+      db.offerCompletion.aggregate({
+        _sum: { payout: true },
+        where: { createdAt: { gte: since } },
+      }),
+      db.offerCompletion.aggregate({ _sum: { credits: true } }),
     ]);
 
     const offerIds = offerGroups.map((g) => g.offerId);
@@ -69,6 +99,14 @@ export const analyticsService = {
       ctr: views > 0 ? Number((clicks / views).toFixed(3)) : null,
       activeOffers,
       users,
+      today: {
+        clicks: todayClicks,
+        completions: todayCompletions,
+        conversionRate:
+          todayClicks > 0 ? Number((todayCompletions / todayClicks).toFixed(3)) : null,
+      },
+      estProviderRevenue: Number(revenueAgg._sum.payout ?? 0),
+      totalCreditsIssued: creditsAgg._sum.credits ?? 0,
       topOffers,
       topCountries: countryGroups.map((g) => ({
         country: g.country ?? "??",

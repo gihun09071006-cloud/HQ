@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { logEvent } from "@/lib/logger";
 import { AdGemProvider } from "@/providers/adgem/AdGemProvider";
 import { processAdGemPostback, recordPostbackLog } from "@/services/postback.service";
 
@@ -17,10 +18,12 @@ import { processAdGemPostback, recordPostbackLog } from "@/services/postback.ser
  *   6. write an audit log
  *   7. return 200 OK
  *
- * Register the URL below in the AdGem dashboard (set `verifier` last):
+ * Register the URL below in the AdGem dashboard (keep `verifier` LAST):
  *   https://<host>/api/postback/adgem?player_id={player_id}&amount={amount}
- *     &transaction_id={transaction_id}&offer_id={offer_id}&payout={payout}
- *     &verifier={verifier}
+ *     &transaction_id={transaction_id}&request_id={request_id}
+ *     &offer_id={offer_id}&offer_name={offer_name}&goal_id={goal_id}
+ *     &goal_name={goal_name}&campaign_id={campaign_id}&country={country}
+ *     &payout={payout}&verifier={verifier}
  */
 export const dynamic = "force-dynamic";
 
@@ -40,6 +43,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "postback not configured" }, { status: 500 });
   }
   if (!provider.verifyPostback(req.url)) {
+    logEvent("verification_failed", { provider: "adgem", transactionId, playerId });
     await recordPostbackLog({
       transactionId,
       playerId,
@@ -74,10 +78,16 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   // 2–6 handled by the service.
   const result = await processAdGemPostback({
     transactionId,
+    requestId: params.get("request_id"),
     playerId,
     amount: Number.isFinite(amount) ? amount : 0,
     payout: payout != null && Number.isFinite(payout) ? payout : null,
     offerExternalId: params.get("offer_id"),
+    offerName: params.get("offer_name"),
+    goalId: params.get("goal_id"),
+    goalName: params.get("goal_name"),
+    campaignId: params.get("campaign_id"),
+    country: params.get("country"),
     rawQuery,
   });
 

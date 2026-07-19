@@ -14,6 +14,12 @@ export function formatReward(amount: number, currency = "USD"): string {
   return currency === "USD" ? `$${value}` : `${value} ${currency}`;
 }
 
+/** HQ Credits label, e.g. "1,200 Credits". The only reward figure the
+ * client is ever shown — never the provider reward or payout. */
+export function formatCredits(credits: number): string {
+  return `${Math.round(credits).toLocaleString("en-US")} Credits`;
+}
+
 /** ISO alpha-2 → emoji flag ("KR" → 🇰🇷). */
 export function countryFlag(code: string): string {
   if (!/^[A-Za-z]{2}$/.test(code)) return "🌐";

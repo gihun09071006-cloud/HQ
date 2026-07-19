@@ -44,9 +44,12 @@ export const engagementRepository = {
 
   createClick(data: {
     offerId: string;
+    provider?: string | null;
     userId?: string | null;
     country?: string | null;
     device?: string | null;
+    ipHash?: string | null;
+    userAgent?: string | null;
     referer?: string | null;
   }) {
     return db.$transaction(async (tx) => {

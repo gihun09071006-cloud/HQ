@@ -17,12 +17,15 @@ const DEVICES = [
   { value: "WEB", label: "Web" },
 ] as const;
 
+// Values are provider-reward thresholds used only for the server-side
+// filter; labels are shown in HQ Credits (≈ reward × 100) so no provider
+// reward figure is ever surfaced to the user.
 const MIN_REWARDS = [
   { value: "", label: "Any" },
-  { value: "1", label: "$1+" },
-  { value: "5", label: "$5+" },
-  { value: "10", label: "$10+" },
-  { value: "25", label: "$25+" },
+  { value: "1", label: "100+" },
+  { value: "5", label: "500+" },
+  { value: "10", label: "1K+" },
+  { value: "25", label: "2.5K+" },
 ] as const;
 
 export function OfferFilters({ categories, countries }: OfferFiltersProps) {
@@ -61,7 +64,7 @@ export function OfferFilters({ categories, countries }: OfferFiltersProps) {
         </div>
       </FilterSection>
 
-      <FilterSection label="Minimum reward">
+      <FilterSection label="Minimum credits">
         <div className="flex flex-wrap gap-1.5">
           {MIN_REWARDS.map((r) => (
             <Chip
