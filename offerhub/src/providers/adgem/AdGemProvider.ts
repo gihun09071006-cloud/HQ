@@ -23,7 +23,10 @@ export class AdGemProvider extends OfferProvider {
     const appId = process.env.ADGEM_APP_ID;
     if (!appId) throw new Error("AdGem not configured: set ADGEM_APP_ID");
 
-    const url = new URL("https://api.adgem.com/v1/wall/json");
+    // Defaults to the official AdGem Offer API. Overridable (e.g. staging
+    // or a local fixture) via ADGEM_BASE_URL without touching code.
+    const base = process.env.ADGEM_BASE_URL || "https://api.adgem.com/v1/wall/json";
+    const url = new URL(base);
     url.searchParams.set("appid", appId);
     // The wall API requires a player id; we index with a static one and
     // attach real attribution via {click_id}/{user_id} macros at click time.
