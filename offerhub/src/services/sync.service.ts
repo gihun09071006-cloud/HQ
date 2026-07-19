@@ -44,6 +44,16 @@ export async function syncProvider(provider: OfferProvider): Promise<SyncReport>
   try {
     const offers = await provider.getNormalizedOffers();
 
+    // Empty-feed guard: a provider returning zero offers is almost always a
+    // transient upstream failure (rate limit, outage, auth blip), not "every
+    // offer legitimately vanished". Skip the run so we never expire the whole
+    // live catalogue on a blip — the last good offers stay served.
+    if (offers.length === 0) {
+      await providerRepository.markSyncError(record.id, "Empty feed — sync skipped to protect catalogue");
+      logEvent("provider_failure", { provider: provider.slug, message: "empty feed" });
+      return { provider: provider.slug, synced: 0, expired: 0, skipped: "empty feed" };
+    }
+
     // Create categories up front so concurrent offer upserts don't race to
     // create the same brand-new category (unique-constraint violation).
     await offerRepository.ensureCategories(offers.map((o) => o.categorySlug));

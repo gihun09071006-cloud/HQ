@@ -19,9 +19,12 @@ export function toOfferDTO(row: OfferWithRelations): OfferDTO {
     requirements: row.requirements,
     imageUrl: row.imageUrl,
     bannerUrl: row.bannerUrl,
-    // Provider reward is converted here and never leaves the server; the
-    // client only receives HQ Credits (seeded by the provider offer id).
-    hqCredits: CreditEngine.compute(Number(row.rewardAmount), row.externalId),
+    // Credits are sized server-side from the payout (our revenue) and never
+    // leave the server; the client only ever receives HQ Credits.
+    hqCredits: CreditEngine.compute({
+      payoutUsd: row.payout != null ? Number(row.payout) : null,
+      rewardUsd: Number(row.rewardAmount),
+    }),
     device: row.device,
     status: row.status,
     isFeatured: row.isFeatured,

@@ -2,26 +2,21 @@ import { CreditEngine } from "@/lib/CreditEngine";
 import type { NormalizedOffer, PublicOffer } from "@/types/offer";
 
 /**
- * HQ Credits helpers — SERVER-SIDE ONLY. Conversion lives in the
- * CreditEngine; this module only adapts offers to it and strips provider
- * economics before anything reaches the browser.
+ * HQ Credits helpers — SERVER-SIDE ONLY. The conversion lives in the
+ * CreditEngine; this module only adapts a normalized offer to it and strips
+ * provider economics before anything reaches the browser.
  *
- * Per the HQ Core Principles (/PRINCIPLES.md): credits are an internal
- * unit, and provider revenue (our payout) must never leave the server.
+ * Per the HQ Core Principles (/PRINCIPLES.md): Credits are an internal,
+ * non-monetary unit; provider revenue (our payout) never leaves the server.
  */
-
-/** Provider reward → HQ Credits, seeded by a stable key for jitter. */
-export function toCredits(rewardAmount: number, seed: string): number {
-  return CreditEngine.compute(rewardAmount, seed);
-}
 
 /**
  * Strip all provider economics and expose only HQ Credits.
  *
  * The single chokepoint an offer passes through before the browser:
  * `rewardAmount`, `rewardCurrency`, `payout` and `raw` are dropped here.
- * Credits are seeded by the provider offer id so the figure is stable and
- * matches what the completion postback will grant.
+ * Credits are sized from the payout (our revenue) via the CreditEngine,
+ * falling back to the user-facing reward value when payout is unknown.
  */
 export function toPublicOffer(
   offer: NormalizedOffer,
@@ -35,7 +30,7 @@ export function toPublicOffer(
     imageUrl: offer.imageUrl ?? null,
     bannerUrl: offer.bannerUrl ?? null,
     url: offer.url,
-    credits: toCredits(offer.rewardAmount, offer.externalId),
+    credits: CreditEngine.compute({ payoutUsd: offer.payout ?? null, rewardUsd: offer.rewardAmount }),
     device: offer.device,
     categorySlug: offer.categorySlug ?? null,
     countries: offer.countries,

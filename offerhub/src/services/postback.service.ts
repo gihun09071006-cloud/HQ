@@ -100,15 +100,26 @@ export async function processAdGemPostback(pb: AdGemPostback): Promise<PostbackR
     return { status: "unknown_player" };
   }
 
-  // A reversal / non-positive amount grants nothing at MVP — just record it.
-  if (!(pb.amount > 0)) {
-    await recordPostbackLog({ ...logBase, status: "ignored_non_positive" });
+  // A negative payout (or amount, when payout is absent) is a REVERSAL /
+  // chargeback: AdGem clawing back a conversion it later judged invalid. We
+  // must claw the Credits back too, or fraudulent completions stay paid.
+  const isReversal =
+    (pb.payout != null && pb.payout < 0) || (pb.payout == null && pb.amount < 0);
+
+  // Credits are an internal, non-monetary unit. Sized server-side from the
+  // payout (our revenue) via the CreditEngine — the user is only ever
+  // granted Credits, never money. Reversals negate the same computation.
+  const magnitude = CreditEngine.compute({
+    payoutUsd: pb.payout != null ? Math.abs(pb.payout) : null,
+    rewardUsd: pb.payout == null ? Math.abs(pb.amount) : null,
+  });
+  const credits = isReversal ? -magnitude : magnitude;
+
+  // Nothing to grant or claw back (e.g. a $0 goal) — record and stop.
+  if (credits === 0) {
+    await recordPostbackLog({ ...logBase, status: "ignored_zero_value" });
     return { status: "ignored_non_positive" };
   }
-
-  // HQ Credits, seeded by the provider offer id so the granted amount
-  // matches what the user saw while browsing (same CreditEngine seed).
-  const credits = CreditEngine.compute(pb.amount, pb.offerExternalId ?? pb.transactionId);
 
   // Best-effort resolve our own Offer row. Completions are still recorded
   // and credited even when the offer isn't in our catalogue.
@@ -147,11 +158,15 @@ export async function processAdGemPostback(pb: AdGemPostback): Promise<PostbackR
           rewardAmount: new Prisma.Decimal(pb.amount),
           payout: pb.payout != null ? new Prisma.Decimal(pb.payout) : null,
           credits,
-          status: "credited",
+          status: isReversal ? "reversed" : "credited",
         },
         select: { id: true },
       });
 
+      // Balance is a materialized cache of the ledger; the CreditTransaction
+      // rows are the source of truth. `increment` applies the signed delta
+      // (negative on reversal — balance may legitimately go negative if a
+      // clawed-back user already spent, which the ledger faithfully records).
       const updated = await tx.user.update({
         where: { id: user.id },
         data: { credits: { increment: credits } },
@@ -163,7 +178,7 @@ export async function processAdGemPostback(pb: AdGemPostback): Promise<PostbackR
           userId: user.id,
           amount: credits,
           balanceAfter: updated.credits,
-          reason: "offer_completion",
+          reason: isReversal ? "offer_reversal" : "offer_completion",
           provider: PROVIDER,
           completionId: completion.id,
         },
@@ -179,8 +194,13 @@ export async function processAdGemPostback(pb: AdGemPostback): Promise<PostbackR
       offerId: offer?.id ?? null,
       externalOfferId: pb.offerExternalId,
       credits,
+      reversal: isReversal,
     });
-    await recordPostbackLog({ ...logBase, status: "ok", message: `+${credits} credits` });
+    await recordPostbackLog({
+      ...logBase,
+      status: isReversal ? "reversed" : "ok",
+      message: `${credits > 0 ? "+" : ""}${credits} credits`,
+    });
     return { status: "ok", credits, completionId };
   } catch (error) {
     // Lost a race with a concurrent identical postback → treat as duplicate.

@@ -1,76 +1,75 @@
-import crypto from "crypto";
-
 /**
- * Credit Engine — the single source of truth for turning a provider reward
- * into HQ Credits.
+ * Credit Engine — the single, provider-independent place that decides how
+ * many HQ Credits a reward is worth.
  *
- * HQ Credits are an internal unit (see /PRINCIPLES.md): they are NOT USD and
- * NOT the provider payout. The base algorithm is:
+ * HQ Credits are an INTERNAL, NON-MONETARY unit (see /PRINCIPLES.md): they
+ * are not fiat currency, not the provider payout, and carry no fixed cash
+ * value. Users are only ever granted Credits — HQ never pays users money.
  *
- *     credits = round(providerReward × multiplier × jitter)
+ * Design: every provider adapter normalizes its response to a common basis
+ * (USD amounts). The engine sizes the Credit grant from the PROVIDER PAYOUT
+ * (our revenue) times an internal generosity ratio, then a credits-per-USD
+ * scale:
  *
- * where `jitter ∈ [1 - jitterPct, 1 + jitterPct]`. The jitter defeats
- * back-calculation of the provider payout from a public credit figure.
+ *     credits = round(payoutUsd × HQ_PAYOUT_RATIO × HQ_CREDITS_PER_USD)
  *
- * Crucially the jitter is **deterministic**, seeded by a stable key (the
- * provider offer id) rather than random per call. That guarantees:
- *   • the credits shown while browsing an offer equal the credits granted
- *     when that offer's postback lands (same seed → same factor), and
- *   • the figure never flickers between renders.
- * It still varies unpredictably from one offer to the next, which is what
- * actually frustrates reverse-engineering.
+ * Basing the grant on payout (not on any provider's own "virtual currency")
+ * keeps the engine identical for AdGem, Torox, BitLabs, CPX, … — no
+ * per-provider branching and no dependency on whether a network has a
+ * virtual-currency system. `HQ_PAYOUT_RATIO` is purely an internal knob for
+ * how generous Credit grants are relative to revenue; it is NOT a cash
+ * payout ratio and never leaves the server.
  *
- * The formula is intentionally swappable: bump `VERSION`, branch in
- * `compute()`, and no call site changes.
+ * When only a user-facing reward value is known (a provider without a payout
+ * field), the adapter passes `rewardUsd` and the engine scales that directly.
  */
 
-export interface CreditFormula {
-  /** Credits per unit of provider reward. */
-  multiplier: number;
-  /** ± fraction applied as deterministic jitter (0.1 = ±10%). */
-  jitterPct: number;
+const DEFAULT_CREDITS_PER_USD = 100;
+const DEFAULT_PAYOUT_RATIO = 0.7;
+
+export interface RewardBasis {
+  /** Provider payout / our revenue in USD — the preferred basis. */
+  payoutUsd?: number | null;
+  /** Fallback user-facing reward value in USD, when payout is unknown. */
+  rewardUsd?: number | null;
 }
 
-const DEFAULT_MULTIPLIER = 100;
-const DEFAULT_JITTER_PCT = 0.1;
-
-export const CREDIT_ENGINE_VERSION = 1;
-
-function currentFormula(): CreditFormula {
-  const m = Number(process.env.HQ_CREDITS_PER_UNIT);
-  const j = Number(process.env.HQ_CREDITS_JITTER_PCT);
-  return {
-    multiplier: Number.isFinite(m) && m > 0 ? m : DEFAULT_MULTIPLIER,
-    jitterPct: Number.isFinite(j) && j >= 0 && j < 1 ? j : DEFAULT_JITTER_PCT,
-  };
+function creditsPerUsd(): number {
+  const v = Number(process.env.HQ_CREDITS_PER_USD);
+  return Number.isFinite(v) && v > 0 ? v : DEFAULT_CREDITS_PER_USD;
 }
 
-/** Deterministic factor in [1 - jitterPct, 1 + jitterPct] derived from `seed`. */
-function jitterFactor(seed: string, jitterPct: number): number {
-  if (jitterPct <= 0 || !seed) return 1;
-  const digest = crypto.createHash("sha256").update(seed).digest();
-  const unit = digest.readUInt32BE(0) / 0xffffffff; // [0, 1]
-  const delta = (unit * 2 - 1) * jitterPct; // [-jitterPct, +jitterPct]
-  return 1 + delta;
+function payoutRatio(): number {
+  const v = Number(process.env.HQ_PAYOUT_RATIO);
+  return Number.isFinite(v) && v > 0 && v <= 1 ? v : DEFAULT_PAYOUT_RATIO;
+}
+
+function finiteOrZero(v: number | null | undefined): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
 }
 
 export const CreditEngine = {
-  version: CREDIT_ENGINE_VERSION,
-
-  /** The active formula (for admin display / debugging). */
-  formula: currentFormula,
+  /** Active configuration (for admin display / debugging). */
+  config() {
+    return { creditsPerUsd: creditsPerUsd(), payoutRatio: payoutRatio() };
+  },
 
   /**
-   * Convert a provider reward into HQ Credits.
+   * Provider basis → whole-number HQ Credits (always ≥ 0).
    *
-   * @param providerReward provider's user-facing reward, in their unit
-   * @param seed stable key for the deterministic jitter — pass the provider
-   *   offer id so browse-time and postback-time credits agree
+   * Prefers `payoutUsd` (our revenue × internal ratio); falls back to a
+   * known user-facing `rewardUsd`. Reversals/deductions are handled by the
+   * caller negating this value — the engine itself never returns negatives.
    */
-  compute(providerReward: number, seed: string): number {
-    if (!Number.isFinite(providerReward) || providerReward <= 0) return 0;
-    const { multiplier, jitterPct } = currentFormula();
-    const raw = providerReward * multiplier * jitterFactor(seed, jitterPct);
-    return Math.max(1, Math.round(raw));
+  compute(basis: RewardBasis): number {
+    const perUsd = creditsPerUsd();
+
+    const payout = finiteOrZero(basis.payoutUsd);
+    if (payout > 0) return Math.max(1, Math.round(payout * payoutRatio() * perUsd));
+
+    const reward = finiteOrZero(basis.rewardUsd);
+    if (reward > 0) return Math.max(1, Math.round(reward * perUsd));
+
+    return 0;
   },
 };
