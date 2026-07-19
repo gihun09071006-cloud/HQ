@@ -18,12 +18,14 @@ import { processAdGemPostback, recordPostbackLog } from "@/services/postback.ser
  *   6. write an audit log
  *   7. return 200 OK
  *
- * Register the URL below in the AdGem dashboard (keep `verifier` LAST):
+ * Register the URL below in the AdGem dashboard (keep `verifier` LAST). Note
+ * `conversion_type` — install/non-reward events must be excluded from paying:
  *   https://<host>/api/postback/adgem?player_id={player_id}&amount={amount}
  *     &transaction_id={transaction_id}&request_id={request_id}
- *     &offer_id={offer_id}&offer_name={offer_name}&goal_id={goal_id}
- *     &goal_name={goal_name}&campaign_id={campaign_id}&country={country}
- *     &payout={payout}&verifier={verifier}
+ *     &conversion_type={conversion_type}&offer_id={offer_id}
+ *     &offer_name={offer_name}&goal_id={goal_id}&goal_name={goal_name}
+ *     &campaign_id={campaign_id}&country={country}&payout={payout}
+ *     &verifier={verifier}
  */
 export const dynamic = "force-dynamic";
 
@@ -80,6 +82,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     transactionId,
     requestId: params.get("request_id"),
     playerId,
+    conversionType: params.get("conversion_type"),
     amount: Number.isFinite(amount) ? amount : 0,
     payout: payout != null && Number.isFinite(payout) ? payout : null,
     offerExternalId: params.get("offer_id"),

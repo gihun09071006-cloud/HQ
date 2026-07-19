@@ -39,6 +39,19 @@ enum ProviderStatus {
   ERROR // last sync failed (auto-set, auto-cleared on success)
 }
 
+/// Lifecycle of a conversion. We never confirm value before the provider's
+/// approval window passes: credits are held as PENDING, then CONFIRMED (and
+/// only then spendable). A reversal cancels a PENDING completion (REJECTED)
+/// or, rarely, claws back a CONFIRMED one (REVERSED). Non-rewarding events
+/// (e.g. AdGem install goals) are recorded as SKIPPED.
+enum CompletionStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  REVERSED
+  SKIPPED
+}
+
 // ── Auth (NextAuth) ──────────────────────────────────────────
 
 model User {
@@ -49,7 +62,8 @@ model User {
   image         String?
   walletAddress String?   @unique
   role          UserRole  @default(USER)
-  credits       Int       @default(0) // HQ Credits balance (mirror of the ledger)
+  credits       Int       @default(0) // CONFIRMED, spendable balance (mirror of the ledger)
+  pendingCredits Int      @default(0) // held from completions awaiting approval (not spendable)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -263,11 +277,24 @@ model OfferCompletion {
   goalName        String?
   campaignId      String?
   country         String?
+  conversionType  String? // provider event type: "reward" | "install" | ...
   rewardAmount    Decimal? @db.Decimal(12, 2) // provider player reward — server-side only
   payout          Decimal? @db.Decimal(12, 4) // provider revenue (our payout) — server-side only
-  credits         Int // HQ Credits granted for this completion
-  status          String   @default("credited") // credited | ignored | reversed
-  createdAt       DateTime @default(now())
+  credits         Int // HQ Credits this completion is worth (the issued/held amount)
+
+  // Policy snapshot — the exact Credit Engine parameters at completion time,
+  // so confirmation and reversals reproduce the original amount even after
+  // HQ_PAYOUT_RATIO / HQ_CREDITS_PER_USD later change.
+  ratioUsed        Decimal? @db.Decimal(6, 4)
+  creditsPerUsdUsed Int?
+  policyVersion    Int?
+  approvalDays     Int? // provider hold window snapshot
+
+  status                CompletionStatus @default(PENDING)
+  holdUntil             DateTime? // PENDING auto-confirms after this
+  confirmedAt           DateTime?
+  reversalOfTransactionId String? // set on a REVERSED/REJECTED row that undoes an earlier one
+  createdAt             DateTime @default(now())
 
   user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
   offer Offer? @relation(fields: [offerId], references: [id], onDelete: SetNull)
@@ -275,6 +302,7 @@ model OfferCompletion {
   @@unique([provider, transactionId])
   @@index([userId, createdAt])
   @@index([offerId])
+  @@index([status, holdUntil])
 }
 
 /// Append-only HQ Credits ledger. Every grant/adjustment is one row;
@@ -283,8 +311,9 @@ model CreditTransaction {
   id           String   @id @default(cuid())
   userId       String
   amount       Int // signed delta — grants are positive
+  balanceBefore Int @default(0) // User.credits before applying this row
   balanceAfter Int // User.credits after applying this row
-  reason       String // "offer_completion", ...
+  reason       String // "offer_confirmed", "offer_reversal", ...
   provider     String?
   completionId String? // OfferCompletion.id, when applicable
   createdAt    DateTime @default(now())

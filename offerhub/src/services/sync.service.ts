@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import { logEvent } from "@/lib/logger";
 import { offerRepository } from "@/repositories/offer.repository";
 import { providerRepository } from "@/repositories/provider.repository";
@@ -44,14 +45,20 @@ export async function syncProvider(provider: OfferProvider): Promise<SyncReport>
   try {
     const offers = await provider.getNormalizedOffers();
 
-    // Empty-feed guard: a provider returning zero offers is almost always a
-    // transient upstream failure (rate limit, outage, auth blip), not "every
-    // offer legitimately vanished". Skip the run so we never expire the whole
-    // live catalogue on a blip — the last good offers stay served.
-    if (offers.length === 0) {
-      await providerRepository.markSyncError(record.id, "Empty feed — sync skipped to protect catalogue");
-      logEvent("provider_failure", { provider: provider.slug, message: "empty feed" });
-      return { provider: provider.slug, synced: 0, expired: 0, skipped: "empty feed" };
+    // Feed-anomaly guard: a provider returning zero — or a small fraction of
+    // its usual catalogue — is almost always a transient upstream failure
+    // (rate limit, outage, auth blip), not "every offer legitimately
+    // vanished". Skip the run so a blip can never expire the whole live
+    // catalogue; the last good offers stay served.
+    const activeCount = await db.offer.count({
+      where: { providerId: record.id, status: "ACTIVE" },
+    });
+    const suspiciousDrop = activeCount >= 20 && offers.length < activeCount * 0.2;
+    if (offers.length === 0 || suspiciousDrop) {
+      const reason = offers.length === 0 ? "empty feed" : `feed dropped ${offers.length}/${activeCount}`;
+      await providerRepository.markSyncError(record.id, `${reason} — sync skipped to protect catalogue`);
+      logEvent("provider_failure", { provider: provider.slug, message: reason });
+      return { provider: provider.slug, synced: 0, expired: 0, skipped: reason };
     }
 
     // Create categories up front so concurrent offer upserts don't race to

@@ -27,11 +27,27 @@
 const DEFAULT_CREDITS_PER_USD = 100;
 const DEFAULT_PAYOUT_RATIO = 0.7;
 
+/** Credits are bucketed to this granularity so the exact payout can't be
+ * back-calculated from a public credit figure. */
+const CREDIT_BUCKET = 5;
+
+/** Bump when the formula changes; stamped onto each completion so past
+ * grants stay reproducible after a policy change. */
+export const CREDIT_POLICY_VERSION = 2;
+
 export interface RewardBasis {
   /** Provider payout / our revenue in USD — the preferred basis. */
   payoutUsd?: number | null;
   /** Fallback user-facing reward value in USD, when payout is unknown. */
   rewardUsd?: number | null;
+}
+
+/** A credit amount plus the exact policy used to produce it. */
+export interface CreditQuote {
+  credits: number;
+  ratioUsed: number;
+  creditsPerUsdUsed: number;
+  policyVersion: number;
 }
 
 function creditsPerUsd(): number {
@@ -55,7 +71,7 @@ export const CreditEngine = {
   },
 
   /**
-   * Provider basis → whole-number HQ Credits (always ≥ 0).
+   * Provider basis → whole-number HQ Credits (always ≥ 0), bucketed.
    *
    * Prefers `payoutUsd` (our revenue × internal ratio); falls back to a
    * known user-facing `rewardUsd`. Reversals/deductions are handled by the
@@ -65,11 +81,32 @@ export const CreditEngine = {
     const perUsd = creditsPerUsd();
 
     const payout = finiteOrZero(basis.payoutUsd);
-    if (payout > 0) return Math.max(1, Math.round(payout * payoutRatio() * perUsd));
+    if (payout > 0) return bucket(payout * payoutRatio() * perUsd);
 
     const reward = finiteOrZero(basis.rewardUsd);
-    if (reward > 0) return Math.max(1, Math.round(reward * perUsd));
+    if (reward > 0) return bucket(reward * perUsd);
 
     return 0;
   },
+
+  /**
+   * Same as `compute`, but also returns the exact policy parameters used —
+   * persist these on the completion so confirmation and reversals reproduce
+   * the original amount even after the policy later changes.
+   */
+  quote(basis: RewardBasis): CreditQuote {
+    return {
+      credits: this.compute(basis),
+      ratioUsed: payoutRatio(),
+      creditsPerUsdUsed: creditsPerUsd(),
+      policyVersion: CREDIT_POLICY_VERSION,
+    };
+  },
 };
+
+/** Round to the nearest CREDIT_BUCKET, with a floor of one bucket for any
+ * positive reward (so a tiny offer still shows a non-zero, coarse figure). */
+function bucket(raw: number): number {
+  if (!(raw > 0)) return 0;
+  return Math.max(CREDIT_BUCKET, Math.round(raw / CREDIT_BUCKET) * CREDIT_BUCKET);
+}

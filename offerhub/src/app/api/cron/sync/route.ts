@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { confirmDueCompletions } from "@/services/confirm.service";
 import { syncAll } from "@/services/sync.service";
 
 export const dynamic = "force-dynamic";
@@ -26,5 +27,8 @@ export async function GET(req: NextRequest) {
 
   const startedAt = Date.now();
   const report = await syncAll();
-  return NextResponse.json({ ok: true, tookMs: Date.now() - startedAt, report });
+  // Confirm PENDING completions whose hold window has elapsed (never confirm
+  // value before the provider's approval window).
+  const confirmed = await confirmDueCompletions();
+  return NextResponse.json({ ok: true, tookMs: Date.now() - startedAt, report, confirmed });
 }

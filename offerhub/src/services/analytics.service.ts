@@ -15,8 +15,10 @@ export interface AnalyticsSummary {
   };
   /** Estimated provider revenue within the window (admin-only aggregate). */
   estProviderRevenue: number;
-  /** All-time HQ Credits issued via completions. */
+  /** All-time HQ Credits CONFIRMED (spendable) via completions. */
   totalCreditsIssued: number;
+  /** HQ Credits currently held PENDING (awaiting the approval window). */
+  pendingCredits: number;
   topOffers: { id: string; title: string; clicks: number }[];
   topCountries: { country: string; clicks: number }[];
   topCategories: { category: string; clicks: number }[];
@@ -39,6 +41,7 @@ export const analyticsService = {
       todayCompletions,
       revenueAgg,
       creditsAgg,
+      pendingAgg,
     ] = await Promise.all([
       db.click.count({ where: { createdAt: { gte: since } } }),
       db.viewHistory.count({ where: { viewedAt: { gte: since } } }),
@@ -64,7 +67,8 @@ export const analyticsService = {
         _sum: { payout: true },
         where: { createdAt: { gte: since } },
       }),
-      db.offerCompletion.aggregate({ _sum: { credits: true } }),
+      db.offerCompletion.aggregate({ _sum: { credits: true }, where: { status: "CONFIRMED" } }),
+      db.offerCompletion.aggregate({ _sum: { credits: true }, where: { status: "PENDING" } }),
     ]);
 
     const offerIds = offerGroups.map((g) => g.offerId);
@@ -107,6 +111,7 @@ export const analyticsService = {
       },
       estProviderRevenue: Number(revenueAgg._sum.payout ?? 0),
       totalCreditsIssued: creditsAgg._sum.credits ?? 0,
+      pendingCredits: pendingAgg._sum.credits ?? 0,
       topOffers,
       topCountries: countryGroups.map((g) => ({
         country: g.country ?? "??",

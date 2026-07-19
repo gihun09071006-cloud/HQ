@@ -70,7 +70,7 @@ export function AdminDashboard({ analytics, providers, offers: initialOffers }: 
         <h2 className="mb-3 font-mono text-[11px] uppercase tracking-wider text-muted-foreground">
           Today (live)
         </h2>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
           <Stat label="Clicks today" value={analytics.today.clicks.toLocaleString()} />
           <Stat label="Completions today" value={analytics.today.completions.toLocaleString()} />
           <Stat
@@ -85,7 +85,8 @@ export function AdminDashboard({ analytics, providers, offers: initialOffers }: 
             label="Est. provider revenue"
             value={`$${analytics.estProviderRevenue.toLocaleString("en-US", { maximumFractionDigits: 2 })}`}
           />
-          <Stat label="HQ Credits issued" value={analytics.totalCreditsIssued.toLocaleString()} />
+          <Stat label="Credits confirmed" value={analytics.totalCreditsIssued.toLocaleString()} />
+          <Stat label="Credits pending" value={analytics.pendingCredits.toLocaleString()} />
         </div>
       </section>
 
