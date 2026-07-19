@@ -49,14 +49,17 @@ model User {
   image         String?
   walletAddress String?   @unique
   role          UserRole  @default(USER)
+  credits       Int       @default(0) // HQ Credits balance (mirror of the ledger)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts  Account[]
-  sessions  Session[]
-  favorites Favorite[]
-  views     ViewHistory[]
-  clicks    Click[]
+  accounts     Account[]
+  sessions     Session[]
+  favorites    Favorite[]
+  views        ViewHistory[]
+  clicks       Click[]
+  completions  OfferCompletion[]
+  creditLedger CreditTransaction[]
 }
 
 model Account {
@@ -165,9 +168,10 @@ model Offer {
   provider  OfferProvider  @relation(fields: [providerId], references: [id], onDelete: Cascade)
   category  Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   countries OfferCountry[]
-  favorites Favorite[]
-  views     ViewHistory[]
-  clicks    Click[]
+  favorites   Favorite[]
+  views       ViewHistory[]
+  clicks      Click[]
+  completions OfferCompletion[]
 
   @@unique([providerId, externalId])
   @@index([status, trendScore(sort: Desc)])
@@ -233,4 +237,66 @@ model Click {
   @@index([offerId, createdAt])
   @@index([createdAt])
   @@index([userId, createdAt])
+}
+
+// ── Conversions, credits & postbacks ─────────────────────────
+
+/// A verified offer completion delivered by a provider S2S postback.
+/// `(provider, transactionId)` is the idempotency key — the unique
+/// constraint is what makes duplicate postbacks safe under retries and
+/// concurrency. Provider economics (rewardAmount, payout) are stored for
+/// reconciliation but never leave the server.
+model OfferCompletion {
+  id              String   @id @default(cuid())
+  provider        String // "adgem", ...
+  transactionId   String // provider-unique transaction id
+  playerId        String // provider-side player id (== our User.id)
+  userId          String?
+  offerId         String? // resolved Offer.id, when the offer is known
+  externalOfferId String? // provider-side offer id
+  rewardAmount    Decimal? @db.Decimal(12, 2) // provider player reward — server-side only
+  payout          Decimal? @db.Decimal(12, 4) // provider revenue (our payout) — server-side only
+  credits         Int // HQ Credits granted for this completion
+  createdAt       DateTime @default(now())
+
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  offer Offer? @relation(fields: [offerId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, transactionId])
+  @@index([userId, createdAt])
+  @@index([offerId])
+}
+
+/// Append-only HQ Credits ledger. Every grant/adjustment is one row;
+/// `balanceAfter` snapshots the resulting User.credits balance.
+model CreditTransaction {
+  id           String   @id @default(cuid())
+  userId       String
+  amount       Int // signed delta — grants are positive
+  balanceAfter Int // User.credits after applying this row
+  reason       String // "offer_completion", ...
+  provider     String?
+  completionId String? // OfferCompletion.id, when applicable
+  createdAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// Raw audit trail of every provider postback hit — verified or not.
+/// Kept for debugging, dispute resolution and fraud review.
+model PostbackLog {
+  id            String   @id @default(cuid())
+  provider      String
+  transactionId String?
+  playerId      String?
+  rawQuery      String   @db.Text // full query string as received
+  verified      Boolean  @default(false)
+  status        String // ok | duplicate | invalid_verifier | unknown_player | bad_request | ...
+  message       String?  @db.Text
+  createdAt     DateTime @default(now())
+
+  @@index([provider, createdAt])
+  @@index([transactionId])
 }

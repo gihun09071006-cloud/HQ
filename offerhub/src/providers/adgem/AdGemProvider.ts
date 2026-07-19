@@ -1,3 +1,5 @@
+import crypto from "crypto";
+
 import type { NormalizedOffer } from "@/types/offer";
 import { OfferProvider, type RawOffer } from "@/providers/base/OfferProvider";
 
@@ -17,6 +19,49 @@ export class AdGemProvider extends OfferProvider {
 
   isConfigured(): boolean {
     return Boolean(process.env.ADGEM_APP_ID);
+  }
+
+  /** Whether the S2S postback secret is present. */
+  isPostbackConfigured(): boolean {
+    return Boolean(process.env.ADGEM_POSTBACK_SECRET);
+  }
+
+  /**
+   * Verify an AdGem server-to-server postback.
+   *
+   * AdGem appends `verifier` as the LAST query parameter; the verifier is
+   * HMAC-SHA256, keyed with the postback secret, over the postback URL with
+   * that `verifier` parameter removed.
+   * https://docs.adgem.com/publisher-support/api-postback-setup/
+   *
+   * Behind a proxy/CDN the request host or scheme may be rewritten, which
+   * would break the HMAC preimage. Set `ADGEM_POSTBACK_URL` to the exact
+   * URL registered in the AdGem dashboard (scheme + host + path, no query)
+   * so the signed base is reconstructed faithfully. The raw query string is
+   * used verbatim (never re-encoded) so the preimage matches byte-for-byte.
+   */
+  verifyPostback(requestUrl: string): boolean {
+    const secret = process.env.ADGEM_POSTBACK_SECRET;
+    if (!secret) return false;
+
+    const qIndex = requestUrl.indexOf("?");
+    const rawQuery = qIndex >= 0 ? requestUrl.slice(qIndex + 1) : "";
+
+    const match = rawQuery.match(/(?:^|&)verifier=([^&]*)/);
+    if (!match) return false;
+    const provided = match[1].toLowerCase();
+
+    const signedQuery = rawQuery.replace(/(?:^|&)verifier=[^&]*/, "").replace(/^&/, "");
+
+    const url = new URL(requestUrl);
+    const base = process.env.ADGEM_POSTBACK_URL || `${url.origin}${url.pathname}`;
+    const signedUrl = signedQuery ? `${base}?${signedQuery}` : base;
+
+    const expected = crypto.createHmac("sha256", secret).update(signedUrl).digest("hex");
+
+    const a = Buffer.from(expected);
+    const b = Buffer.from(provided);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
   }
 
   async fetchOffers(): Promise<RawOffer[]> {
