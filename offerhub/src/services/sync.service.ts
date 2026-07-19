@@ -44,6 +44,10 @@ export async function syncProvider(provider: OfferProvider): Promise<SyncReport>
   try {
     const offers = await provider.getNormalizedOffers();
 
+    // Create categories up front so concurrent offer upserts don't race to
+    // create the same brand-new category (unique-constraint violation).
+    await offerRepository.ensureCategories(offers.map((o) => o.categorySlug));
+
     for (let i = 0; i < offers.length; i += UPSERT_CONCURRENCY) {
       const chunk = offers.slice(i, i + UPSERT_CONCURRENCY);
       await Promise.all(

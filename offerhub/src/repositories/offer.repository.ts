@@ -85,6 +85,24 @@ export const offerRepository = {
     return db.offer.update({ where: { id }, data, include: offerInclude });
   },
 
+  /**
+   * Pre-create every category up front (one query, duplicates ignored).
+   * Offers are upserted concurrently and many share a category; without
+   * this, two concurrent `connectOrCreate` for the same brand-new slug race
+   * and one fails with a unique-constraint violation on Category.slug.
+   */
+  async ensureCategories(slugs: (string | null | undefined)[]) {
+    const unique = Array.from(new Set(slugs.filter((s): s is string => Boolean(s))));
+    if (!unique.length) return;
+    await db.category.createMany({
+      data: unique.map((slug) => ({
+        slug,
+        name: slug.charAt(0).toUpperCase() + slug.slice(1),
+      })),
+      skipDuplicates: true,
+    });
+  },
+
   /** Idempotent upsert keyed on (providerId, externalId). */
   async upsertFromNormalized(providerId: string, offer: NormalizedOffer) {
     const categoryConnect = offer.categorySlug
