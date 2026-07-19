@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Deep blue-slate dark — cooler than pure black, reads "data terminal". */
+    --background: 228 24% 5%;
+    --foreground: 222 18% 92%;
+
+    --card: 227 20% 8%;
+    --card-foreground: 222 18% 92%;
+
+    --muted: 226 16% 13%;
+    --muted-foreground: 223 10% 62%;
+
+    --border: 226 15% 15%;
+    --input: 226 15% 15%;
+
+    /* Indigo: navigation + actions. */
+    --primary: 234 89% 74%;
+    --primary-foreground: 232 47% 10%;
+
+    --secondary: 226 16% 13%;
+    --secondary-foreground: 222 18% 92%;
+
+    --ring: 234 89% 74%;
+
+    /* Gold: reserved exclusively for reward values. */
+    --reward: 41 92% 62%;
+
+    --radius: 0.75rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    color-scheme: dark;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  ::selection {
+    @apply bg-primary/30;
+  }
+
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring/60 ring-offset-2 ring-offset-background;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-muted;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-border;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+}
