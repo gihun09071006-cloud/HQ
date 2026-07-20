@@ -18,14 +18,20 @@ import { processAdGemPostback, recordPostbackLog } from "@/services/postback.ser
  *   6. write an audit log
  *   7. return 200 OK
  *
- * Register the URL below in the AdGem dashboard (keep `verifier` LAST). Note
- * `conversion_type` — install/non-reward events must be excluded from paying:
+ * Register the URL below in the AdGem dashboard (keep `verifier` LAST):
  *   https://<host>/api/postback/adgem?player_id={player_id}&amount={amount}
  *     &transaction_id={transaction_id}&request_id={request_id}
- *     &conversion_type={conversion_type}&offer_id={offer_id}
- *     &offer_name={offer_name}&goal_id={goal_id}&goal_name={goal_name}
- *     &campaign_id={campaign_id}&country={country}&payout={payout}
- *     &verifier={verifier}
+ *     &offer_id={offer_id}&offer_name={offer_name}&goal_id={goal_id}
+ *     &goal_name={goal_name}&campaign_id={campaign_id}&country={country}
+ *     &payout={payout}&verifier={verifier}
+ *
+ * NOTE: AdGem's live macro set for this account has no `conversion_type`
+ * (that's from an older/different API doc — do not add it: an unrecognized
+ * macro is sent back as the literal string "{conversion_type}", which would
+ * make every completion look non-reward and get skipped). Non-rewarding
+ * events (e.g. install-tracking goals) are excluded the correct way per
+ * AdGem's own guidance: they carry payout=0, and processAdGemPostback
+ * already treats a zero-credit quote as SKIPPED — no extra field needed.
  */
 export const dynamic = "force-dynamic";
 

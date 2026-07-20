@@ -14,7 +14,10 @@ export interface AdGemPostback {
   transactionId: string;
   requestId: string | null;
   playerId: string;
-  /** Provider event type: "reward" | "install" | ... Only reward events pay. */
+  /** Provider event type, when the integration sends one ("reward" pays,
+   * others don't). AdGem's live macro set has no such field for most
+   * accounts — that's fine, non-rewarding events already carry payout=0
+   * and get skipped on that basis. Kept optional for other providers. */
   conversionType: string | null;
   /** Provider player reward (virtual currency) — NOT used to size credits. */
   amount: number;
